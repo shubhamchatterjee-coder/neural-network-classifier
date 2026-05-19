@@ -1,0 +1,14 @@
+# Model files (too large for GitHub)
+mnist_model.keras
+cifar_model.keras
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# VS Code
+.vscode/
+
+# Environment
+.env

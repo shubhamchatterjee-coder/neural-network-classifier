@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neural Network Image Classifier</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #0D1B2A;
+    color: #fff;
+    min-height: 100vh;
+  }
+
+  header {
+    background: linear-gradient(135deg, #1B4F72, #2E86C1);
+    padding: 24px 40px;
+    text-align: center;
+    border-bottom: 3px solid #2E86C1;
+  }
+  header h1 { font-size: 2rem; letter-spacing: 2px; }
+  header p  { color: #AED6F1; margin-top: 6px; font-size: 0.95rem; }
+
+  .student-bar {
+    background: #154360;
+    text-align: center;
+    padding: 8px;
+    font-size: 0.85rem;
+    color: #AED6F1;
+    letter-spacing: 1px;
+  }
+
+  .container {
+    max-width: 960px;
+    margin: 40px auto;
+    padding: 0 20px;
+  }
+
+  /* Model selector */
+  .model-tabs {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 30px;
+    justify-content: center;
+  }
+  .tab-btn {
+    padding: 12px 32px;
+    border: 2px solid #2E86C1;
+    background: transparent;
+    color: #AED6F1;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: all 0.3s;
+  }
+  .tab-btn.active, .tab-btn:hover {
+    background: #2E86C1;
+    color: #fff;
+  }
+
+  .card {
+    background: #1B4F72;
+    border-radius: 16px;
+    padding: 32px;
+    margin-bottom: 24px;
+    border: 1px solid #2E86C1;
+  }
+  .card h2 {
+    font-size: 1.2rem;
+    color: #AED6F1;
+    margin-bottom: 20px;
+    letter-spacing: 1px;
+  }
+
+  /* Upload area */
+  .upload-area {
+    border: 2px dashed #2E86C1;
+    border-radius: 12px;
+    padding: 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: #0D1B2A;
+  }
+  .upload-area:hover { border-color: #AED6F1; background: #154360; }
+  .upload-area p { color: #AED6F1; margin-top: 10px; }
+  .upload-icon { font-size: 3rem; }
+
+  #fileInput { display: none; }
+
+  /* Preview */
+  .preview-section {
+    display: none;
+    text-align: center;
+    margin-top: 20px;
+  }
+  .preview-section img {
+    max-width: 200px;
+    max-height: 200px;
+    border-radius: 12px;
+    border: 3px solid #2E86C1;
+    image-rendering: pixelated;
+  }
+
+  /* Predict button */
+  .predict-btn {
+    display: block;
+    margin: 20px auto 0;
+    padding: 14px 48px;
+    background: linear-gradient(135deg, #1E8449, #27AE60);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.3s;
+  }
+  .predict-btn:hover { transform: translateY(-2px); opacity: 0.9; }
+  .predict-btn:disabled { background: #555; cursor: not-allowed; transform: none; }
+
+  /* Result */
+  .result-card {
+    display: none;
+    background: #0D1B2A;
+    border-radius: 16px;
+    padding: 28px;
+    border: 2px solid #1E8449;
+    text-align: center;
+  }
+  .result-label {
+    font-size: 2.5rem;
+    font-weight: 900;
+    color: #27AE60;
+    letter-spacing: 2px;
+  }
+  .result-confidence {
+    font-size: 1.1rem;
+    color: #AED6F1;
+    margin-top: 6px;
+  }
+
+  /* Probability bars */
+  .prob-bars { margin-top: 20px; text-align: left; }
+  .prob-row  { margin-bottom: 8px; }
+  .prob-label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 3px;
+    font-size: 0.85rem;
+    color: #AED6F1;
+  }
+  .prob-track {
+    background: #154360;
+    border-radius: 20px;
+    height: 10px;
+    overflow: hidden;
+  }
+  .prob-fill {
+    height: 100%;
+    border-radius: 20px;
+    background: linear-gradient(90deg, #1B4F72, #2E86C1);
+    transition: width 0.6s ease;
+  }
+  .prob-fill.top { background: linear-gradient(90deg, #1E8449, #27AE60); }
+
+  /* Loading */
+  .loading {
+    display: none;
+    text-align: center;
+    padding: 20px;
+    color: #AED6F1;
+    font-size: 1rem;
+  }
+  .spinner {
+    width: 40px; height: 40px;
+    border: 4px solid #154360;
+    border-top: 4px solid #2E86C1;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 10px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Info box */
+  .info-box {
+    background: #154360;
+    border-radius: 10px;
+    padding: 14px 20px;
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+    color: #AED6F1;
+    border-left: 4px solid #2E86C1;
+  }
+
+  footer {
+    text-align: center;
+    padding: 24px;
+    color: #555;
+    font-size: 0.85rem;
+    border-top: 1px solid #1B4F72;
+    margin-top: 40px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🧠 Neural Network Image Classifier</h1>
+  <p>Upload an image and let the AI predict what it sees</p>
+</header>
+
+<div class="student-bar">
+  Shubham Chatterjee, Tanish Yadav, Sumit Koli, Trilok Rathore &nbsp;|&nbsp;
+  6th Semester &nbsp;|&nbsp; UIT RGPV, Bhopal &nbsp;|&nbsp; Minor Project
+</div>
+
+<div class="container">
+
+  <!-- Model Selector -->
+  <div class="model-tabs">
+    <button class="tab-btn active" onclick="selectModel('mnist', this)">
+      📊 Project 1 — MNIST<br><small>Handwritten Digits (0–9)</small>
+    </button>
+    <button class="tab-btn" onclick="selectModel('cifar', this)">
+      🖼️ Project 2 — CIFAR-10<br><small>Animals & Vehicles</small>
+    </button>
+  </div>
+
+  <!-- Info -->
+  <div class="info-box" id="infoBox">
+    <strong>Project 1 — MNIST:</strong>
+    Upload a handwritten digit image (0 to 9).
+    The model will identify which digit it is with confidence score.
+    Accuracy: <strong>97.92%</strong>
+  </div>
+
+  <!-- Upload Card -->
+  <div class="card">
+    <h2>UPLOAD IMAGE</h2>
+    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+      <div class="upload-icon">📁</div>
+      <p>Click to upload an image</p>
+      <p style="font-size:0.8rem; margin-top:4px; color:#666;">
+        PNG, JPG, JPEG supported
+      </p>
+    </div>
+    <input type="file" id="fileInput" accept="image/*"
+           onchange="handleFile(event)">
+
+    <div class="preview-section" id="previewSection">
+      <img id="previewImg" src="" alt="Preview">
+      <br>
+      <button class="predict-btn" id="predictBtn"
+              onclick="predict()">
+        🔍 &nbsp; CLASSIFY IMAGE
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    Analysing image...
+  </div>
+
+  <!-- Result -->
+  <div class="result-card" id="resultCard">
+    <p style="color:#AED6F1; margin-bottom:8px; font-size:0.9rem;">
+      PREDICTED CLASS
+    </p>
+    <div class="result-label" id="resultLabel">—</div>
+    <div class="result-confidence" id="resultConf"></div>
+    <div class="prob-bars" id="probBars"></div>
+  </div>
+
+</div>
+
+<footer>
+  Neural Network for Image Classification &nbsp;|&nbsp;
+  Minor Project &nbsp;|&nbsp; UIT RGPV Bhopal
+</footer>
+
+<script>
+  let currentModel = 'mnist';
+  let currentImage = null;
+
+  const infoTexts = {
+    mnist: `<strong>Project 1 — MNIST:</strong>
+            Upload a handwritten digit image (0 to 9).
+            The model will identify which digit it is with confidence score.
+            Accuracy: <strong>97.92%</strong>`,
+    cifar: `<strong>Project 2 — CIFAR-10:</strong>
+            Upload an image of an Animal or Vehicle.
+            Categories: Airplane, Car, Bird, Cat, Deer, Dog, Frog, Horse, Ship, Truck.
+            Accuracy: <strong>82.5%</strong>`
+  };
+
+  function selectModel(model, btn) {
+    currentModel = model;
+    document.querySelectorAll('.tab-btn')
+            .forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('infoBox').innerHTML = infoTexts[model];
+    resetUI();
+  }
+
+  function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      currentImage = ev.target.result;
+      document.getElementById('previewImg').src = currentImage;
+      document.getElementById('previewSection').style.display = 'block';
+      document.getElementById('resultCard').style.display   = 'none';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function resetUI() {
+    document.getElementById('previewSection').style.display = 'none';
+    document.getElementById('resultCard').style.display     = 'none';
+    document.getElementById('loading').style.display        = 'none';
+    document.getElementById('fileInput').value              = '';
+    currentImage = null;
+  }
+
+  async function predict() {
+    if (!currentImage) return;
+
+    document.getElementById('loading').style.display    = 'flex';
+    document.getElementById('loading').style.display    = 'block';
+    document.getElementById('resultCard').style.display = 'none';
+    document.getElementById('predictBtn').disabled      = true;
+
+    try {
+      const res = await fetch('/predict', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          model: currentModel,
+          image: currentImage
+        })
+      });
+      const data = await res.json();
+
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('predictBtn').disabled   = false;
+
+      document.getElementById('resultLabel').textContent =
+        currentModel === 'mnist'
+          ? 'Digit: ' + data.label
+          : data.label;
+
+      document.getElementById('resultConf').textContent =
+        'Confidence: ' + data.confidence + '%';
+
+      // Probability bars
+      const barsDiv = document.getElementById('probBars');
+      barsDiv.innerHTML = '<p style="color:#AED6F1;margin-bottom:10px;font-size:0.9rem;">All Class Probabilities:</p>';
+
+      const probs  = data.all_probs;
+      const topKey = Object.keys(probs)
+                           .reduce((a,b) => probs[a]>probs[b] ? a : b);
+
+      Object.entries(probs)
+            .sort((a,b) => b[1]-a[1])
+            .forEach(([cls, prob]) => {
+              const isTop = cls === topKey;
+              barsDiv.innerHTML += `
+                <div class="prob-row">
+                  <div class="prob-label">
+                    <span>${isTop ? '🏆 ' : ''}${cls}</span>
+                    <span>${prob}%</span>
+                  </div>
+                  <div class="prob-track">
+                    <div class="prob-fill ${isTop ? 'top' : ''}"
+                         style="width:${prob}%"></div>
+                  </div>
+                </div>`;
+            });
+
+      document.getElementById('resultCard').style.display = 'block';
+
+    } catch(err) {
+      document.getElementById('loading').style.display  = 'none';
+      document.getElementById('predictBtn').disabled    = false;
+      alert('Error: ' + err.message);
+    }
+  }
+</script>
+</body>
+</html>
