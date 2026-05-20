@@ -18,7 +18,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # -----------------------------------------------------------
-# MODEL FILE NAME
+# MODEL FILE PATH
 # -----------------------------------------------------------
 
 MODEL_PATH = "cifar10_cnn_model.keras"
@@ -37,10 +37,11 @@ print("   CNN - ANIMALS & VEHICLES CLASSIFICATION")
 print("=" * 55)
 
 # -----------------------------------------------------------
-# LOAD DATA
+# STEP 1: LOAD DATASET
+# CIFAR-10 contains 60,000 color images across 10 classes
 # -----------------------------------------------------------
 
-print("\nStep 1: Dataset load ho raha hai...")
+print("\nStep 1: Loading dataset...")
 
 (x_train, y_train), (x_test, y_test) = cifar10.load_data()
 
@@ -51,7 +52,8 @@ print(f"   Training images : {x_train.shape[0]}")
 print(f"   Testing images  : {x_test.shape[0]}")
 
 # -----------------------------------------------------------
-# PREPROCESSING
+# STEP 2: PREPROCESSING
+# Normalize pixel values from 0-255 to 0-1
 # -----------------------------------------------------------
 
 print("\nStep 2: Preprocessing...")
@@ -60,7 +62,8 @@ x_train = x_train.astype('float32') / 255.0
 x_test  = x_test.astype('float32') / 255.0
 
 # -----------------------------------------------------------
-# CHECK IF MODEL EXISTS
+# STEP 3: CHECK FOR SAVED MODEL
+# Load existing model if available; otherwise train from scratch
 # -----------------------------------------------------------
 
 if os.path.exists(MODEL_PATH):
@@ -79,6 +82,8 @@ else:
 
     # -------------------------------------------------------
     # DATA AUGMENTATION
+    # Artificially expands training data with random transforms
+    # to improve generalization and reduce overfitting
     # -------------------------------------------------------
 
     datagen = tf.keras.preprocessing.image.ImageDataGenerator(
@@ -91,12 +96,14 @@ else:
     datagen.fit(x_train)
 
     # -------------------------------------------------------
-    # CNN MODEL
+    # CNN MODEL ARCHITECTURE
+    # Convolutional blocks extract spatial features from images
+    # Dense layers at the end perform final classification
     # -------------------------------------------------------
 
     model = keras.Sequential([
 
-        # Block 1
+        # Block 1: Initial feature extraction
         layers.Conv2D(
             32,
             (3,3),
@@ -122,7 +129,7 @@ else:
 
         layers.Dropout(0.2),
 
-        # Block 2
+        # Block 2: Deeper feature extraction
         layers.Conv2D(
             64,
             (3,3),
@@ -147,7 +154,7 @@ else:
 
         layers.Dropout(0.3),
 
-        # Block 3
+        # Block 3: High-level feature extraction
         layers.Conv2D(
             128,
             (3,3),
@@ -162,7 +169,7 @@ else:
 
         layers.Dropout(0.4),
 
-        # Dense Layers
+        # Classification Head
         layers.Flatten(),
 
         layers.Dense(
@@ -191,6 +198,7 @@ else:
 
     # -------------------------------------------------------
     # COMPILE MODEL
+    # Configures the learning algorithm and evaluation metric
     # -------------------------------------------------------
 
     print("\nStep 3: Compiling model...")
@@ -209,10 +217,11 @@ else:
 
     # -------------------------------------------------------
     # TRAIN MODEL
+    # Uses augmented data batches for robust training
     # -------------------------------------------------------
 
     print("\nStep 4: Training model...")
-    print("   (First time training mein 10-15 min lag sakte hain)\n")
+    print("   (First-time training may take 10-15 minutes)\n")
 
     history = model.fit(
         datagen.flow(x_train, y_train, batch_size=64),
@@ -225,6 +234,7 @@ else:
 
     # -------------------------------------------------------
     # SAVE MODEL
+    # Persists the trained model to disk for future use
     # -------------------------------------------------------
 
     print("\nSaving model...")
@@ -235,6 +245,7 @@ else:
 
     # -------------------------------------------------------
     # TRAINING GRAPHS
+    # Visualizes accuracy and loss trends across epochs
     # -------------------------------------------------------
 
     print("\nGenerating training graphs...")
@@ -264,7 +275,8 @@ else:
     plt.show()
 
 # -----------------------------------------------------------
-# EVALUATE MODEL
+# STEP 5: EVALUATE MODEL
+# Measures final performance on the held-out test set
 # -----------------------------------------------------------
 
 print("\nStep 5: Evaluating model...")
@@ -279,7 +291,8 @@ print(f"\n✅ Test Accuracy : {test_accuracy * 100:.2f}%")
 print(f"📉 Test Loss     : {test_loss:.4f}")
 
 # -----------------------------------------------------------
-# PREDICTIONS
+# STEP 6: GENERATE PREDICTIONS
+# Runs the model on all test images to collect predictions
 # -----------------------------------------------------------
 
 print("\nStep 6: Making predictions...")
@@ -292,10 +305,11 @@ predictions = model.predict(
 y_pred = np.argmax(predictions, axis=1)
 
 # -----------------------------------------------------------
-# CONFUSION MATRIX
+# STEP 7: CONFUSION MATRIX
+# Visualizes correct vs incorrect predictions per class
 # -----------------------------------------------------------
 
-print("\nStep 7: Confusion Matrix...")
+print("\nStep 7: Generating Confusion Matrix...")
 
 cm = confusion_matrix(y_test, y_pred)
 
@@ -327,7 +341,7 @@ plt.savefig(
 plt.show()
 
 # -----------------------------------------------------------
-# FINAL REPORT
+# FINAL RESULTS SUMMARY
 # -----------------------------------------------------------
 
 print("\n" + "=" * 55)
