@@ -2,7 +2,6 @@ import streamlit as st
 import numpy as np
 from PIL import Image, ImageFilter
 import tensorflow as tf
-from scipy import ndimage
 
 # ─────────────────────────────────────────────
 # PAGE CONFIG
@@ -46,75 +45,86 @@ MNIST_LABELS = [str(i) for i in range(10)]
 CIFAR_LABELS = ["Airplane","Automobile","Bird","Cat","Deer","Dog","Frog","Horse","Ship","Truck"]
 
 # ─────────────────────────────────────────────
-# MNIST PREPROCESSING — Proper MNIST-style pipeline
+# PURE NUMPY — Center of mass & shift (no scipy!)
+# ─────────────────────────────────────────────
+def get_center_of_mass(arr):
+    total = arr.sum()
+    if total == 0:
+        return 14.0, 14.0
+    rows = np.arange(arr.shape[0])
+    cols = np.arange(arr.shape[1])
+    cy = float(rows @ arr.sum(axis=1)) / total
+    cx = float(cols @ arr.sum(axis=0)) / total
+    return cy, cx
+
+def shift_image(arr, shift_y, shift_x):
+    """Shift a 28x28 array by (shift_y, shift_x) pixels using slicing."""
+    result = np.zeros((28, 28), dtype=np.float32)
+    sy = int(round(shift_y))
+    sx = int(round(shift_x))
+
+    src_r0 = max(0, -sy);  src_r1 = min(28, 28 - sy)
+    dst_r0 = max(0,  sy);  dst_r1 = min(28, 28 + sy)
+    src_c0 = max(0, -sx);  src_c1 = min(28, 28 - sx)
+    dst_c0 = max(0,  sx);  dst_c1 = min(28, 28 + sx)
+
+    if (src_r1 > src_r0) and (src_c1 > src_c0):
+        result[dst_r0:dst_r1, dst_c0:dst_c1] = arr[src_r0:src_r1, src_c0:src_c1]
+    return result
+
+# ─────────────────────────────────────────────
+# MNIST PREPROCESSING — MNIST-style pipeline
 # ─────────────────────────────────────────────
 def preprocess_mnist(image: Image.Image):
-    """
-    Mimics the exact preprocessing MNIST dataset used:
-    1. Grayscale + Invert (digit=white, bg=black)
-    2. Find bounding box → crop digit
-    3. Resize to 20x20 (keeping aspect ratio)
-    4. Pad to 28x28 centered
-    5. Shift to center of mass (key MNIST trick)
-    6. Reshape to match model input shape
-    """
-    # Step 1: Grayscale
-    img = image.convert("L")
-
-    # Step 2: Slight blur to remove noise
-    img = img.filter(ImageFilter.GaussianBlur(radius=1))
+    # 1. Grayscale + slight blur
+    img = image.convert("L").filter(ImageFilter.GaussianBlur(radius=1))
     arr = np.array(img, dtype=np.float32) / 255.0
 
-    # Step 3: Invert if white background
+    # 2. Invert if white background (normal paper)
     if arr.mean() > 0.5:
         arr = 1.0 - arr
 
-    # Step 4: Threshold — remove noise pixels
+    # 3. Threshold — remove weak noise pixels
     arr = np.where(arr > 0.2, arr, 0.0)
 
-    # Step 5: Find bounding box of the digit
+    # 4. Bounding box crop
     rows = np.any(arr > 0, axis=1)
     cols = np.any(arr > 0, axis=0)
 
     if rows.any() and cols.any():
         rmin, rmax = np.where(rows)[0][[0, -1]]
         cmin, cmax = np.where(cols)[0][[0, -1]]
-
-        # Crop to digit only
         digit = arr[rmin:rmax+1, cmin:cmax+1]
 
-        # Step 6: Resize to 20x20 (MNIST puts digit in 20x20 box)
-        digit_img = Image.fromarray((digit * 255).astype(np.uint8))
-        # Keep aspect ratio — fit within 20x20
+        # 5. Resize to fit 20×20 (keeping aspect ratio)
         h, w = digit.shape
         if h > w:
             new_h, new_w = 20, max(1, int(20 * w / h))
         else:
             new_h, new_w = max(1, int(20 * h / w)), 20
+
+        digit_img = Image.fromarray((digit * 255).astype(np.uint8))
         digit_img = digit_img.resize((new_w, new_h), Image.LANCZOS)
 
-        # Step 7: Pad to 28x28 centered
+        # 6. Place in center of 28×28 canvas
         padded = np.zeros((28, 28), dtype=np.float32)
         top  = (28 - new_h) // 2
         left = (28 - new_w) // 2
-        digit_arr = np.array(digit_img, dtype=np.float32) / 255.0
-        padded[top:top+new_h, left:left+new_w] = digit_arr
+        d = np.array(digit_img, dtype=np.float32) / 255.0
+        padded[top:top+new_h, left:left+new_w] = d
         arr = padded
     else:
         arr = np.zeros((28, 28), dtype=np.float32)
 
-    # Step 8: Center of mass shift — THE KEY MNIST TRICK
-    cy, cx = ndimage.center_of_mass(arr)
-    if not (np.isnan(cy) or np.isnan(cx)):
-        shift_y = 14.0 - cy
-        shift_x = 14.0 - cx
-        arr = ndimage.shift(arr, [shift_y, shift_x], mode='constant', cval=0)
+    # 7. Center of mass shift (pure numpy)
+    cy, cx = get_center_of_mass(arr)
+    arr = shift_image(arr, 14.0 - cy, 14.0 - cx)
 
-    # Step 9: Normalize to [0,1]
+    # 8. Normalize
     if arr.max() > 0:
         arr = arr / arr.max()
 
-    # Step 10: Reshape for model
+    # 9. Reshape for model input shape
     input_shape = mnist_model.input_shape
     if len(input_shape) == 2:
         return arr.flatten().reshape(1, 784)
@@ -128,17 +138,15 @@ def preprocess_cifar(image: Image.Image):
     return arr.reshape(1, 32, 32, 3)
 
 # ─────────────────────────────────────────────
-# CONFIDENCE BARS — Native Streamlit
+# UI HELPERS
 # ─────────────────────────────────────────────
 def show_confidence_bars(probs, labels, top_n=5):
     st.markdown("#### 📊 Top Confidence Scores")
-    top_indices = np.argsort(probs)[::-1][:top_n]
-    for idx in top_indices:
-        label = labels[idx]
-        prob  = float(probs[idx])
+    for idx in np.argsort(probs)[::-1][:top_n]:
+        prob = float(probs[idx])
         c1, c2 = st.columns([3, 1])
         with c1:
-            st.write(f"**{label}**")
+            st.write(f"**{labels[idx]}**")
             st.progress(min(prob, 1.0))
         with c2:
             st.metric(label="", value=f"{prob*100:.1f}%")
@@ -190,23 +198,23 @@ tab1, tab2 = st.tabs(["📝 MNIST — Digit Recognition", "🖼️ CIFAR-10 — 
 
 with tab1:
     st.subheader("Upload a Handwritten Digit (0–9)")
-    st.info("💡 **Best results:** Write ONE digit clearly on plain white paper with dark pen/marker. Take photo in good lighting. Digit should be large and fill most of the image.")
+    st.info("💡 Write ONE big digit on plain white paper with dark pen. Fill most of the image. Good lighting!")
 
     uploaded = st.file_uploader("Choose an image...", type=["jpg","jpeg","png"], key="mnist")
-
     if uploaded:
         image = Image.open(uploaded)
         c1, c2 = st.columns([1, 2])
         with c1:
             st.image(image, caption="Your Image", use_container_width=True)
-            # Show preprocessed image so user can verify
+            # Show preprocessed preview
             try:
-                img_gray = image.convert("L").filter(ImageFilter.GaussianBlur(1))
-                arr_preview = np.array(img_gray, dtype=np.float32) / 255.0
-                if arr_preview.mean() > 0.5:
-                    arr_preview = 1.0 - arr_preview
-                preview_img = Image.fromarray((arr_preview * 255).astype(np.uint8))
-                st.image(preview_img, caption="Preprocessed (what model sees)", use_container_width=True)
+                arr_prev = preprocess_mnist(image)
+                if len(arr_prev.shape) == 2 or arr_prev.shape[-1] == 1:
+                    prev_28 = arr_prev.reshape(28, 28)
+                else:
+                    prev_28 = arr_prev.reshape(28, 28)
+                prev_img = Image.fromarray((prev_28 * 255).astype(np.uint8))
+                st.image(prev_img, caption="What model sees (28×28)", use_container_width=True)
             except:
                 pass
         with c2:
@@ -214,10 +222,8 @@ with tab1:
                 try:
                     arr   = preprocess_mnist(image)
                     preds = mnist_model.predict(arr, verbose=0)[0]
-                    pred_class = int(np.argmax(preds))
-                    confidence = float(np.max(preds))
-                    show_result(MNIST_LABELS[pred_class], confidence)
-                    show_confidence_bars(preds, MNIST_LABELS, top_n=5)
+                    show_result(MNIST_LABELS[int(np.argmax(preds))], float(np.max(preds)))
+                    show_confidence_bars(preds, MNIST_LABELS)
                 except Exception as e:
                     st.error(f"❌ Error: {e}")
 
@@ -226,7 +232,6 @@ with tab2:
     st.info("💡 Categories: Airplane, Automobile, Bird, Cat, Deer, Dog, Frog, Horse, Ship, Truck")
 
     uploaded2 = st.file_uploader("Choose an image...", type=["jpg","jpeg","png"], key="cifar")
-
     if uploaded2:
         image2 = Image.open(uploaded2)
         c1, c2 = st.columns([1, 2])
@@ -237,14 +242,11 @@ with tab2:
                 try:
                     arr2   = preprocess_cifar(image2)
                     preds2 = cifar_model.predict(arr2, verbose=0)[0]
-                    pred_class2 = int(np.argmax(preds2))
-                    confidence2 = float(np.max(preds2))
-                    show_result(CIFAR_LABELS[pred_class2], confidence2)
-                    show_confidence_bars(preds2, CIFAR_LABELS, top_n=5)
+                    show_result(CIFAR_LABELS[int(np.argmax(preds2))], float(np.max(preds2)))
+                    show_confidence_bars(preds2, CIFAR_LABELS)
                 except Exception as e:
                     st.error(f"❌ Error: {e}")
 
-# FOOTER
 st.markdown("""
 <div class="footer-bar">
     🧠 <b>Architecture Summary</b> &nbsp;|&nbsp;
