@@ -2,3 +2,4 @@ streamlit
 numpy
 tensorflow-cpu==2.18.0
 pillow
+scipy
