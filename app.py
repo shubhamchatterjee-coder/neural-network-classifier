@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, render_template
 import numpy as np
 import tensorflow as tf
-from tensorflow import keras
+from tensorflow import keras # pyright: ignore[reportMissingModuleSource]
 import base64
 from PIL import Image
 import io
@@ -24,7 +24,7 @@ mnist_model = keras.Sequential([
 ])
 
 # Train MNIST model quickly
-from tensorflow.keras.datasets import mnist
+from tensorflow.keras.datasets import mnist # pyright: ignore[reportMissingImports]
 (x_train, y_train), _ = mnist.load_data()
 x_train = x_train.astype('float32') / 255.0
 x_train_flat = x_train.reshape(-1, 784)
@@ -37,7 +37,7 @@ mnist_model.fit(x_train_flat, y_train, epochs=5,
 print("MNIST model ready!")
 
 # CIFAR-10 Model
-from tensorflow.keras.datasets import cifar10
+from tensorflow.keras.datasets import cifar10 # pyright: ignore[reportMissingImports]
 CIFAR_CLASSES = ['Airplane','Car','Bird','Cat','Deer',
                  'Dog','Frog','Horse','Ship','Truck']
 
@@ -118,4 +118,4 @@ def predict():
                         'all_probs': all_probs})
 
 if __name__ == '__main__':
-    app.run(debug=False)
+    app.run(host='0.0.0.0', debug=False)

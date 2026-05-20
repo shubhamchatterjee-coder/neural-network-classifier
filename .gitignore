@@ -1,7 +1,3 @@
-# Model files (too large for GitHub)
-mnist_model.keras
-cifar_model.keras
-
 # Python cache
 __pycache__/
 *.pyc
@@ -10,5 +6,13 @@ __pycache__/
 # VS Code
 .vscode/
 
-# Environment
-.env
+# Old Flask files (not needed for Streamlit)
+app.py
+templates/
+
+# Training output images
+*.png
+
+# Old training scripts
+project.py
+project2.py
